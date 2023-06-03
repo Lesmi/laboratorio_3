@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Image, Alert } from 'react-native';
-import { Camera } from 'expo-camera';
+import { StyleSheet, Text, View, TouchableOpacity, Image, Alert} from 'react-native';
+import { Camera, requestCameraPermissionsAsync } from 'expo-camera';
 import * as FileSystem from 'expo-file-system';
+import * as MediaLibrary from 'expo-media-library';
 
 export default function App() {
   const [hasPermission, setHasPermission] = useState(null);
@@ -24,13 +25,17 @@ export default function App() {
     })();
   }, []);
 
+
   const takePicture = async () => {
     if (camera) {
-      const photoData = await camera.takePictureAsync();
-      console.log(photoData);
-      const photoUri = await savePhoto(photoData.uri);
-      setPhoto(photoUri);
-      setShowPhoto(true);
+      if (await requestCameraPermissionsAsync()) {
+        const photoData = await camera.takePictureAsync();
+        const photoUri = await savePhoto(photoData.uri);
+        setPhoto(photoUri);
+        setShowPhoto(true);
+        console.log(photoUri);
+
+      } else { }
     }
   };
 
@@ -45,25 +50,18 @@ export default function App() {
     await FileSystem.makeDirectoryAsync(subDirectory, { intermediates: true });
     await FileSystem.makeDirectoryAsync(subSubDirectory, { intermediates: true });
 
-    const fileName = `${generateUniqueId()}.jpg`;
-    const newPhotoUri = `${subSubDirectory}/${fileName}`;
+    const folderInfo = await FileSystem.getInfoAsync(directory);
+        if (!folderInfo.exists) {
+          await FileSystem.makeDirectoryAsync(directory, { intermediates: true });
+        }
 
-    await FileSystem.moveAsync({
-      from: photoUri,
-      to: newPhotoUri,
-    });
+        const fileName = photoUri.split('/').pop();
+        const newLocation = `${subSubDirectory}/${fileName}`;
+        await FileSystem.moveAsync({ from: photoUri, to: newLocation });
 
-    return newPhotoUri;
-  };
+        await MediaLibrary.saveToLibraryAsync(newLocation);
 
-  const getPhotoDirectory = async () => {
-    const { year, month, day } = getDateInfo();
-
-    const directory = `${FileSystem.documentDirectory}${year}`;
-    const subDirectory = `${directory}/${month}`;
-    const subSubDirectory = `${subDirectory}/${day}`;
-
-    return subSubDirectory;
+    return newLocation;
   };
 
   const getDateInfo = () => {
@@ -73,10 +71,6 @@ export default function App() {
     const day = currentDate.getDate().toString().padStart(2, '0');
 
     return { year, month, day };
-  };
-
-  const generateUniqueId = () => {
-    return Date.now().toString(36) + Math.random().toString(36).substr(2);
   };
 
   const closePhoto = () => {
@@ -90,12 +84,20 @@ export default function App() {
     }
   };
 
+  const getPhotoDirectory = async () => {
+    const { year, month, day } = getDateInfo();
+
+    const directory = `${FileSystem.documentDirectory}${year}`;
+    const subDirectory = `${directory}/${month}`;
+    const subSubDirectory = `${subDirectory}/${day}`;
+
+    return subSubDirectory;
+  };
+
   if (hasPermission === null) {
     return <View />;
-  }
-
-  if (hasPermission === false) {
-    return <Text>No tienes acceso a la cámara.</Text>;
+  } else if (hasPermission === false) {
+    return <Text>No se ha otorgado permiso para usar la cámara</Text>;
   }
 
   return (
@@ -113,7 +115,7 @@ export default function App() {
             <Text style={styles.buttonText}>Tomar foto</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.folderButton} onPress={showFolderPath}>
-            <Text style={styles.folderButtonText}>Mostrar Carpeta</Text>
+            <Text style={styles.folderButtonText}>Mostrar Ruta</Text>
           </TouchableOpacity>
         </Camera>
       )}
