@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Image, Alert} from 'react-native';
-import { Camera, requestCameraPermissionsAsync } from 'expo-camera';
+import { StyleSheet, Text, View, TouchableOpacity, Image, Alert } from 'react-native';
+import { Camera } from 'expo-camera';
 import * as FileSystem from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library';
 
@@ -20,22 +20,29 @@ export default function App() {
 
   useEffect(() => {
     (async () => {
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission not granted!');
+        return;
+      }
+
       const directory = await getPhotoDirectory();
       setFolderPath(directory);
     })();
   }, []);
 
-
   const takePicture = async () => {
     if (camera) {
-      if (await requestCameraPermissionsAsync()) {
+      const { status } = await Camera.requestCameraPermissionsAsync();
+      if (status === 'granted') {
         const photoData = await camera.takePictureAsync();
         const photoUri = await savePhoto(photoData.uri);
         setPhoto(photoUri);
         setShowPhoto(true);
         console.log(photoUri);
-
-      } else { }
+      } else {
+        Alert.alert('Permission not granted!');
+      }
     }
   };
 
@@ -51,15 +58,15 @@ export default function App() {
     await FileSystem.makeDirectoryAsync(subSubDirectory, { intermediates: true });
 
     const folderInfo = await FileSystem.getInfoAsync(directory);
-        if (!folderInfo.exists) {
-          await FileSystem.makeDirectoryAsync(directory, { intermediates: true });
-        }
+    if (!folderInfo.exists) {
+      await FileSystem.makeDirectoryAsync(directory, { intermediates: true });
+    }
 
-        const fileName = photoUri.split('/').pop();
-        const newLocation = `${subSubDirectory}/${fileName}`;
-        await FileSystem.moveAsync({ from: photoUri, to: newLocation });
+    const fileName = photoUri.split('/').pop();
+    const newLocation = `${subSubDirectory}/${fileName}`;
+    await FileSystem.moveAsync({ from: photoUri, to: newLocation });
 
-        await MediaLibrary.saveToLibraryAsync(newLocation);
+    await MediaLibrary.saveToLibraryAsync(newLocation);
 
     return newLocation;
   };
